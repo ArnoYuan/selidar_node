@@ -182,23 +182,7 @@ int main(int argc, char * argv[])
         return -1;
     }
 
-    // reset lidar
-    drv->reset ();
-    NS_NaviCommon::delay (5000);
-    
-    // check health...
-    if (!checkSelidarHealth (drv))
-    {
-      return -1;
-    }
-    
-    NS_NaviCommon::delay (100);
-    
-    // get device info...
-    if (!checkSelidarInfo (drv))
-    {
-      return -1;
-    }
+  
     NS_NaviCommon::delay (100);
 
     ros::ServiceServer stop_motor_service = nh.advertiseService("stop_motor", stop_motor);

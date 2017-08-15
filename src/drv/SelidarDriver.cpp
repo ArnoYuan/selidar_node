@@ -66,7 +66,7 @@ namespace NS_Selidar
   {
     if (!connected)
       return;
-    stop ();
+   // stop ();
     rxtx->close ();
   }
   
@@ -455,19 +455,13 @@ namespace NS_Selidar
     if (scanning)
       return Denied;
     
-    stop ();
+   // stop ();
     
     // have to slow down the speed of sending cmd, otherwise next cmd will be discard by radar
     NS_NaviCommon::delay (100);
     
     {
       boost::mutex::scoped_lock auto_lock (rxtx_lock);
-      
-      if (IS_FAIL(ans = sendCommand (StartScanReq)))
-      {
-        return ans;
-      }
-      
       scanning = true;
       cache_thread = boost::thread (
           boost::bind (&SelidarDriver::cacheScanData, this));
