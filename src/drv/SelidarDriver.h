@@ -73,7 +73,7 @@ namespace NS_Selidar
 
     SelidarMeasurementNode cached_scan_node_buf[2048];
     size_t cached_scan_node_count;
-
+    
     boost::thread cache_thread;
   };
 
