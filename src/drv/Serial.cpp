@@ -283,9 +283,10 @@ namespace NS_Selidar
   {
     if (!isOpened ())
       return;
-    
-    unsigned int dtr_bit = TIOCM_DTR;
-    ioctl (serial_fd, TIOCMBIS, &dtr_bit);
+    //while(1){
+    	unsigned int dtr_bit = TIOCM_DTR;
+    	ioctl (serial_fd, TIOCMBIS, &dtr_bit);
+	//}
   }
   
   void

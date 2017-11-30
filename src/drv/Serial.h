@@ -63,7 +63,7 @@ namespace NS_Selidar
     
     unsigned int
     getTermBaudBitmap (unsigned int baud);
-
+	 int serial_fd;
   private:
     bool
     open (const char * portname, unsigned int baudrate, unsigned int flags = 0);
@@ -76,7 +76,7 @@ namespace NS_Selidar
     unsigned int _baudrate;
     unsigned int _flags;
 
-    int serial_fd;
+   
 
     size_t required_tx_cnt;
     size_t required_rx_cnt;

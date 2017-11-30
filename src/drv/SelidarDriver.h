@@ -47,7 +47,12 @@ namespace NS_Selidar
     virtual int
     grabScanData (SelidarMeasurementNode * nodebuffer, size_t & count,
                   unsigned int timeout = DEFAULT_TIMEOUT);
-
+	 virtual int
+	getSerialId ();
+	virtual int
+	startMotor();
+virtual int
+	stopMotor();
   protected:
     int
     sendCommand (unsigned char cmd);
@@ -58,7 +63,7 @@ namespace NS_Selidar
     DEFAULT_TIMEOUT);
 
     int
-    waitScanData (unsigned short& angle_range, SelidarMeasurementNode* nodes,
+    waitScanData (unsigned short& flag, SelidarMeasurementNode* nodes,
                   size_t& node_count, unsigned int timeout = DEFAULT_TIMEOUT);
 
     int

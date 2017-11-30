@@ -4,13 +4,24 @@
 #include "SelidarDriver.h"
 #include "SelidarProtocol.h"
 #include "SelidarTypes.h"
+#include <stdio.h>
+#include "std_srvs/Empty.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <errno.h>
 
 #ifndef _countof
 #define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
 #endif
 
 #define DEG2RAD(x) ((x)*M_PI/180.)
-
+int fd = 0;
+bool isScanning = 0;
 using namespace NS_NaviCommon;
 using namespace NS_Selidar;
 
@@ -134,18 +145,20 @@ bool stop_motor(std_srvs::Empty::Request &req,
        return false;
 
   ROS_DEBUG("Stop motor");
-  drv->stop();
+	drv->stop();
+  drv->stopMotor();
   return true;
 }
 
 bool start_motor(std_srvs::Empty::Request &req,
                                std_srvs::Empty::Response &res)
 {
-  if(!drv)
-       return false;
-  ROS_DEBUG("Start motor");
-  drv->startScan();;
-  return true;
+	if(!drv)
+		return false;
+    ROS_DEBUG("Start motor");
+    drv->startMotor();
+	drv->startScan();
+    return true;
 }
 
 void scanLoop (ros::Publisher scan_pub, bool inverted, std::string frame_id)
@@ -193,54 +206,42 @@ void scanLoop (ros::Publisher scan_pub, bool inverted, std::string frame_id)
         }
 
         int pub_nodes_count = 0;
-
-        for (int i = 0; i < buffered_nodes; i++)
+		int i;
+		int isfilled = 0;
+        for (i = 1; i < buffered_nodes; i++)
         {
           if (i > 0 && nodes_buffer[i].angle_scale_100 < nodes_buffer[i - 1].angle_scale_100)
           {
-            pub_nodes_count = i;
-            //copy publish nodes
-            for (int j = 0; j < pub_nodes_count; j++)
-            {
-              nodes_pub[j] = nodes_buffer[j];
-            }
-
-            //re-serialize,save temp
-            for (int j = 0; j < buffered_nodes; j++)
-            {
-              nodes_temp[j] = nodes_buffer[pub_nodes_count + j];
-            }
-
-            //save to buffer
-            buffered_nodes -= pub_nodes_count;
-            for (int j = 0; j < buffered_nodes; j++)
-            {
-              nodes_buffer[j] = nodes_temp[j];
-            }
-
-            break;
+				isfilled = 1;
+				break;
           }
         }
-
-       /* if (pub_nodes_count > 0)
-        {
-
-          float angle_min = (nodes_pub[0].angle_scale_100 % 36000) / 100.0f;
-          float angle_max = (nodes_pub[pub_nodes_count - 1].angle_scale_100 % 36000) / 100.0f;
-
-
-          angle_min = DEG2RAD(angle_min);
-          angle_max = DEG2RAD(angle_max);
-
-          publish_scan(&scan_pub,
-                  angle_compensate_nodes,
-                  pub_nodes_count, start_scan_time,
-                  scan_duration, inverted,
-                  angle_min, angle_max,
-                  frame_id);
-        }
-
-*/
+		if (isfilled == 1)
+		{
+			pub_nodes_count = 0;
+			for (int j = i; j < buffered_nodes; j++)
+     	   	{
+           	 nodes_pub[pub_nodes_count++] = nodes_buffer[j];
+       		 }
+       		 for (int k = 0; k < i; k++)
+        	{
+           	 nodes_pub[pub_nodes_count++] = nodes_buffer[k];
+       		 }
+			buffered_nodes -= pub_nodes_count;
+			isfilled = 0;
+		}
+		else
+		{
+			pub_nodes_count = 0;
+				
+			for(i = 0; i < buffered_nodes; i++)
+			{
+				nodes_pub[pub_nodes_count++] = nodes_buffer[i];
+			}
+			buffered_nodes -= pub_nodes_count;
+			isfilled = 0;
+		}
+		
         if (pub_nodes_count > 0)
         {
           float angle_min = DEG2RAD(0.0f);
@@ -253,82 +254,32 @@ void scanLoop (ros::Publisher scan_pub, bool inverted, std::string frame_id)
           memset (angle_compensate_nodes, 0, angle_compensate_nodes_count * sizeof(SelidarMeasurementNode));
 
           int i, j;
-         /* for (i = 0; i < pub_nodes_count; i++)
-          {//with   angle_compensate
-            if (nodes_pub[i].distance_scale_1000 != 0)
-            {
-              float angle = (float) (nodes_pub[i].angle_scale_100) / 100.0f;
-              int angle_value = (int) (angle * angle_compensate_multiple);
-              if ((angle_value - angle_compensate_offset) < 0)
-                angle_compensate_offset = angle_value;
+			for (i = 0; i < pub_nodes_count; i++)
+          	{//with   angle_compensate
+		        if (nodes_pub[i].distance_scale_1000 != 0)
+		        {
+		          float angle = (float) (nodes_pub[i].angle_scale_100) / 100.0f;
+		          int angle_value = (int) (angle * angle_compensate_multiple);
+		          if ((angle_value - angle_compensate_offset) < 0)
+		            angle_compensate_offset = angle_value;
 
-              for (j = 0; j < angle_compensate_multiple; j++)
-              {
-                angle_compensate_nodes[angle_value - angle_compensate_offset + j] = nodes_pub[i];
-              }
-            }
-          }
-          publish_scan(&scan_pub,
-                  angle_compensate_nodes,
-                  pub_nodes_count, start_scan_time,
-                  scan_duration, inverted,
-                  angle_min, angle_max,
-                  frame_id);
-        }*/
-	for (i = 0; i < pub_nodes_count; i++)
-          {//without   angle_compensate
-              float angle = (float) (nodes_pub[i].angle_scale_100) / 100.0f;
-              int angle_value = (int) (angle * angle_compensate_multiple);
-              if ((angle_value - angle_compensate_offset) < 0)
-              	angle_compensate_offset = angle_value;          
-          }
-		publish_scan(&scan_pub,
-		          nodes_pub,
-		          pub_nodes_count, start_scan_time,
-		          scan_duration, inverted,
-		          angle_min, angle_max,
-		          frame_id);
+		          for (j = 0; j < angle_compensate_multiple; j++)
+		          {
+		            angle_compensate_nodes[angle_value - angle_compensate_offset + j] = nodes_pub[i];
+		          }
+		        }
+		    }
+		      publish_scan(&scan_pub,
+		              angle_compensate_nodes,
+		              pub_nodes_count, start_scan_time,
+		              scan_duration, inverted,
+		              angle_min, angle_max,
+		              frame_id);
         }
-        /*
-        float angle_min = DEG2RAD(0.0f);
-        float angle_max = DEG2RAD(359.0f);
-        
-        const int angle_compensate_nodes_count = 360;
-        const int angle_compensate_multiple = 1;
-        int angle_compensate_offset = 0;
-        SelidarMeasurementNode angle_compensate_nodes[angle_compensate_nodes_count];
-        memset (angle_compensate_nodes, 0, angle_compensate_nodes_count * sizeof(SelidarMeasurementNode));
-
-        int i, j;
-        for (i = 0; i < count; i++)
-        {
-          if (nodes[i].distance_scale_1000 != 0)
-          {
-            float angle = (float) (nodes[i].angle_scale_100) / 100.0f;
-            int angle_value = (int) (angle * angle_compensate_multiple);
-            if ((angle_value - angle_compensate_offset) < 0)
-              angle_compensate_offset = angle_value;
-
-            for (j = 0; j < angle_compensate_multiple; j++)
-            {
-              angle_compensate_nodes[angle_value - angle_compensate_offset + j] = nodes[i];
-            }
-          }
-        }
-        publish_scan(&scan_pub,
-                  angle_compensate_nodes,
-                  pub_nodes_count, start_scan_time,
-                  scan_duration, inverted,
-                  angle_min, angle_max,
-                  frame_id);
-        */
-
-
       }
     }
-
   }
-  
+
 int main(int argc, char * argv[]) 
 {
 
@@ -362,20 +313,133 @@ int main(int argc, char * argv[])
     }
 
     NS_NaviCommon::delay (100);
-
-   // ros::ServiceServer stop_motor_service = nh.advertiseService("stop_motor", stop_motor);
-   // ros::ServiceServer start_motor_service = nh.advertiseService("start_motor", start_motor);
+	ros::ServiceServer stop_motor_service = nh.advertiseService("stop_motor", stop_motor);
+    ros::ServiceServer start_motor_service = nh.advertiseService("start_motor", start_motor);
 
     if(drv->startScan() != Success)
     {
       printf("start failed\n");
       return -1;
     }
-    scanLoop(scan_pub,inverted,frame_id);
-    
+	isScanning = 1;
+	//fd = drv->getSerialId();
+	//ros::ServiceServer service = nh.advertiseService("selidar_node", setDtr);
+	
+	//ROS_INFO("R to waiting response");
+	//ros::spin();
+  // scanLoop(scan_pub,inverted,frame_id);
+    int op_result;
+    ros::Time start_scan_time;
+    ros::Time end_scan_time;
+ 
+    double scan_duration;
+
+    const int buffer_size = 360 * 10;
+    SelidarMeasurementNode nodes_pub[buffer_size];
+	SelidarMeasurementNode nodes_buffer[buffer_size];
+    size_t buffered_nodes = 0;
+  	memset (nodes_buffer, 0, sizeof(nodes_buffer));
+    memset (nodes_pub, 0, sizeof(nodes_pub));
+
+    while (ros::ok())
+    {
+      SelidarMeasurementNode nodes[buffer_size];
+      size_t count = _countof(nodes);
+      start_scan_time = ros::Time::now ();
+      op_result = drv->grabScanData (nodes, count);
+      end_scan_time = ros::Time::now();
+      scan_duration = (end_scan_time - start_scan_time).toSec () * 1e-3;
+
+      if (op_result == Success)
+      {
+        if ((buffered_nodes + count) > buffer_size)
+        {
+          printf("Lidar buffer is full!");
+          buffered_nodes = 0;
+          continue;
+        }
+		//printf("grabScanData is %ld\n", count);
+        for (int i = 0; i < count; i++)
+        {
+          nodes_buffer[buffered_nodes] = nodes[i];
+          if (nodes_buffer[buffered_nodes].angle_scale_100 >= 36000)
+            nodes_buffer[buffered_nodes].angle_scale_100 -= 36000;
+          buffered_nodes++;
+        }
+		//printf("buffered_nodes is %ld\n", buffered_nodes);
+        int pub_nodes_count = 0;
+		int i;
+		int isfilled = 0;
+        for (i = 1; i < buffered_nodes; i++)
+        {
+          if (i > 0 && nodes_buffer[i].angle_scale_100 < nodes_buffer[i - 1].angle_scale_100)
+          {
+				isfilled = 1;
+				break;
+          }
+        }
+		//printf("i is %d\n", i);
+		if (isfilled == 1)
+		{
+			pub_nodes_count = 0;
+			for (int j = i; j < buffered_nodes; j++)
+     	   	{
+           	 nodes_pub[pub_nodes_count++] = nodes_buffer[j];
+       		 }
+       		 for (int k = 0; k < i; k++)
+        	{
+           	 nodes_pub[pub_nodes_count++] = nodes_buffer[k];
+       		 }
+			buffered_nodes -= pub_nodes_count;
+			isfilled = 0;
+		}
+		else
+		{
+			pub_nodes_count = 0;
+				
+			for(i = 0; i < buffered_nodes; i++)
+			{
+				nodes_pub[pub_nodes_count++] = nodes_buffer[i];
+			}
+			buffered_nodes -= pub_nodes_count;
+			isfilled = 0;
+		}
+		//printf("pub_nodes_count is %d\n", pub_nodes_count);
+		//printf("buffered_nodes is %ld\n", buffered_nodes);
+        if (pub_nodes_count > 0)
+        {
+          float angle_min = DEG2RAD(0.0f);
+          float angle_max = DEG2RAD(359.0f);
+
+          const int angle_compensate_nodes_count = 360;
+          const int angle_compensate_multiple = 1;
+          int angle_compensate_offset = 0;
+          SelidarMeasurementNode angle_compensate_nodes[angle_compensate_nodes_count];
+          memset (angle_compensate_nodes, 0, angle_compensate_nodes_count * sizeof(SelidarMeasurementNode));
+
+          int i;
+
+			for (i = 0; i < pub_nodes_count; i++)
+			{//without   angle_compensate
+              float angle = (float) (nodes_pub[i].angle_scale_100) / 100.0f;
+              int angle_value = (int) (angle * angle_compensate_multiple);
+              if ((angle_value - angle_compensate_offset) < 0)
+              	angle_compensate_offset = angle_value;          
+			}
+			publish_scan(&scan_pub,
+		          nodes_pub,
+		          pub_nodes_count, start_scan_time,
+		          scan_duration, inverted,
+		          angle_min, angle_max,
+		          frame_id);
+        }
+      }
+		ros::spinOnce();
+    }
     // done!
    // drv->stop();
     drv->disconnect ();
-        ros::spinOnce();
+	//ros::spinOnce();
+       
     return 0;
 }

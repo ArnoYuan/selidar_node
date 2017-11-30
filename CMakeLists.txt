@@ -10,6 +10,10 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rosconsole
   sensor_msgs
+  message_generation
+  rospy
+  std_msgs
+  std_srvs
 )
 
 include_directories(
@@ -18,8 +22,14 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-catkin_package()
 
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
+
+
+catkin_package()
 add_executable(selidarNode src/node.cpp ${SELIDAR_DRV_SRC})
 target_link_libraries(selidarNode ${catkin_LIBRARIES})
 

@@ -349,8 +349,8 @@ namespace NS_Selidar
 
     while (scanning)
     {
-      unsigned short range;
-      if (IS_FAIL(ans = waitScanData (range, local_buf, count)))
+      unsigned short isstart = 0;
+      if (IS_FAIL(ans = waitScanData (isstart, local_buf, count)))
       {
         if (ans != Timeout)
         {
@@ -361,86 +361,26 @@ namespace NS_Selidar
 
       boost::mutex::scoped_lock auto_lock (rxtx_lock);
 
-      bool valid_scan = false;
-      bool full_range_scan = false;
-
-      /*
-      if (range == SELIDAR_START_RANGES)
+      if (isstart == 1)
       {
-        cached_scan_node_count = 0;
-        got_start_range = true;
-      }
-      
-      if (cached_scan_node_count >= MAX_SCAN_NODES)
-      {
-      printf ("Too many nodes to got! enter next loop!\n");
-      cached_scan_node_count = 0;
-        continue;
-      }
-      
-      for (int i = 0; i < count; i++)
-      {
-        cached_scan_node_buf[cached_scan_node_count++] = local_buf[i];
-      }
-      
-      if (range == SELIDAR_MIDDLE_RANGES && !got_start_range)
-      {
-        cached_scan_node_count = 0;
-        data_cond.set();
-      }
-
-      if (range == SELIDAR_END_RANGES)
-      {
-        got_start_range = false;
-        printf ("cache: %d\n", cached_scan_node_count);
-        data_cond.set ();
-      }
-      */
-      switch (range)
-      {
-      case SELIDAR_START_RANGES:
+		  cached_scan_node_count = cached_count;
+		  memcpy(cached_scan_node_buf, local_scan, cached_scan_node_count*sizeof(SelidarMeasurementNode));
+          data_cond.set ();
         cached_count = 0;
-        got_start_range = true;
-        valid_scan = true;
-        break;
-      case SELIDAR_MIDDLE_RANGES:
-        if (got_start_range)
-        {
-          valid_scan = true;
-        }else{
-          valid_scan = false;
-          cached_count = 0;
-        }
-        break;
-      case SELIDAR_END_RANGES:
-        got_start_range = false;
-        valid_scan = true;
-        full_range_scan = true;
-        break;
-      default:
-        cached_count = 0;
-        valid_scan = false;
-        break;
       }
-
-      if (valid_scan && cached_count < MAX_SCAN_NODES)
-      {
-        for (int i = 0; i < count; i++)
+		if(cached_count >= 2048)
+		{
+			scanning = false;
+			return Timeout;
+		}
+     for (int i = 0; i < count; i++)
     {
-      cached_scan_node_buf[cached_count++] = local_buf[i];
+      local_scan[cached_count++] = local_buf[i];
     }
 
-        if (full_range_scan)
-        {
+      
          // printf ("cache: %d, --->%d\n", cached_count, cached_scan_node_count);
-          cached_scan_node_count = cached_count;
-          data_cond.set ();
-        }
-      }else{
-      cached_count = 0;
-      cached_scan_node_count = cached_count;
-        data_cond.set ();
-      }
+          
 
     }
     scanning = false;
@@ -448,12 +388,12 @@ namespace NS_Selidar
   }
   
   int
-  SelidarDriver::waitScanData (unsigned short& angle_range,
+  SelidarDriver::waitScanData (unsigned short& flag,
                                SelidarMeasurementNode* nodes,
                                size_t& node_count, unsigned int timeout)
   {
     int ans;
-    
+    unsigned short angle_range;
     unsigned char checksum = 0;
     
     // waiting for confirmation
@@ -467,7 +407,7 @@ namespace NS_Selidar
     {
       return Invalid;
     }
-    
+   
     for (size_t i = 0; i < sizeof(SelidarPacketHead); i++)
     {
       checksum ^= *((unsigned char*) &response_header + i);
@@ -475,7 +415,7 @@ namespace NS_Selidar
     
     //discard first packet
     size_t data_size = response_header.length - sizeof(SelidarPacketHead);
-    
+    flag = response_header.payload_len>>15;
     if (rxtx->waitfordata (data_size, timeout) != Serial::ANS_OK)
     {
       return Timeout;
@@ -584,4 +524,21 @@ namespace NS_Selidar
     }
   }
 
+	int
+  SelidarDriver::getSerialId ()
+  {
+	return rxtx->serial_fd;
+  }
+	int
+	 SelidarDriver::startMotor()
+	{
+		rxtx->clearDTR();
+		return Success;
+	}
+
+	int SelidarDriver::stopMotor()
+	{
+		rxtx->setDTR();
+		return Success;
+	}
 }
