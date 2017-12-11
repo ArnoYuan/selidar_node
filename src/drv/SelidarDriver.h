@@ -47,6 +47,7 @@ namespace NS_Selidar
     virtual int
     grabScanData (SelidarMeasurementNode * nodebuffer, size_t & count,
                   unsigned int timeout = DEFAULT_TIMEOUT);
+    void acsendScanData(SelidarMeasurementNode * nodebuffer, size_t & count);
 	 virtual int
 	getSerialId ();
 	virtual int

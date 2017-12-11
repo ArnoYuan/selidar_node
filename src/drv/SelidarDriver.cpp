@@ -379,7 +379,7 @@ namespace NS_Selidar
     }
 
       
-         // printf ("cache: %d, --->%d\n", cached_count, cached_scan_node_count);
+       //   printf ("cache: %d, --->%d\n", count, cached_scan_node_count);
           
 
     }
@@ -515,6 +515,7 @@ namespace NS_Selidar
                 size_to_copy * sizeof(SelidarMeasurementNode));
         count = size_to_copy;
         cached_scan_node_count = 0;
+	
       }
         return Success;
         
@@ -523,6 +524,43 @@ namespace NS_Selidar
         return Failure;
     }
   }
+
+    void SelidarDriver::acsendScanData(SelidarMeasurementNode * nodebuffer, size_t & count)
+    {
+	size_t i = 0;
+	size_t j = 0;
+	SelidarMeasurementNode tnode;
+
+	//printf("count=%d\n", count);
+	//printf("raw:\n");
+	for(i=0;i<count;i++)
+	{
+		if(nodebuffer[i].angle_scale_100>=36000)
+			nodebuffer[i].angle_scale_100 -= 36000;
+		//printf("%d,", nodebuffer[i].angle_scale_100);
+	}
+	//printf("\nascend\n");
+	for(i=0;i<count-1;i++)
+	{
+	    j=i+1;
+	    for(;j<count;j++)
+	    {
+		if(nodebuffer[j].angle_scale_100<nodebuffer[i].angle_scale_100)
+		{
+		   // printf("angle:[%d]%d,[%d]%d\n", i, nodebuffer[i].angle_scale_100, j, nodebuffer[j].angle_scale_100);
+		    memcpy(&tnode, &nodebuffer[i], sizeof(SelidarMeasurementNode));
+		    memcpy(&nodebuffer[i], &nodebuffer[j], sizeof(SelidarMeasurementNode));
+		    memcpy(&nodebuffer[j], &tnode, sizeof(SelidarMeasurementNode));
+		}
+	    }
+	}
+	//for(i=0;i<count;i++)
+	//{
+	//	printf("%d,", nodebuffer[i].angle_scale_100);
+	//}
+	//printf("\n");
+	
+    }
 
 	int
   SelidarDriver::getSerialId ()

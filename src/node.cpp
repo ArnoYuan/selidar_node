@@ -20,6 +20,10 @@
 #endif
 
 #define DEG2RAD(x) ((x)*M_PI/180.)
+
+#define PUB_NODES	720
+#define DELTA_ANGLE	0.5
+
 int fd = 0;
 bool isScanning = 0;
 using namespace NS_NaviCommon;
@@ -280,6 +284,160 @@ void scanLoop (ros::Publisher scan_pub, bool inverted, std::string frame_id)
     }
   }
 
+
+
+#if 1
+int main(int argc, char *argv[])
+{
+    ros::init(argc, argv, "selidar_node");
+
+    std::string serial_port;
+    int serial_baudrate = 115200;
+    std::string frame_id;
+    bool inverted = false;
+    int angle_compensate = 1;
+
+    ros::NodeHandle nh;
+    ros::Publisher scan_pub = nh.advertise<sensor_msgs::LaserScan>("scan", 1000);
+    
+    ros::NodeHandle nh_private("~");
+    nh_private.param<std::string>("serial_port", serial_port, "/dev/ttyUSB0"); 
+    nh_private.param<int>("serial_baudrate", serial_baudrate, 115200); 
+    nh_private.param<std::string>("frame_id", frame_id, "laser_frame");
+    nh_private.param<bool>("inverted", inverted, false);
+    // create the driver instance
+    drv = new SelidarDriver();
+    
+    if (!drv) {
+        fprintf(stderr, "Create Driver fail, exit\n");
+        return -2;
+    }
+    if (IS_FAIL(drv->connect(serial_port.c_str(), (uint32_t)serial_baudrate, 0))) {
+        fprintf(stderr, "Error, cannot bind to the specified serial port %s.\n"
+            , serial_port.c_str());
+        drv->disconnect ();
+        return -1;
+    }
+
+    NS_NaviCommon::delay (100);
+	ros::ServiceServer stop_motor_service = nh.advertiseService("stop_motor", stop_motor);
+    ros::ServiceServer start_motor_service = nh.advertiseService("start_motor", start_motor);
+
+    if(drv->startScan() != Success)
+    {
+      printf("start failed\n");
+      return -1;
+    }
+	isScanning = 1;
+	//fd = drv->getSerialId();
+	//ros::ServiceServer service = nh.advertiseService("selidar_node", setDtr);
+	
+	//ROS_INFO("R to waiting response");
+	//ros::spin();
+  // scanLoop(scan_pub,inverted,frame_id);
+    int op_result;
+    ros::Time start_scan_time;
+    ros::Time end_scan_time;
+ 
+    double scan_duration;
+    
+
+    SelidarMeasurementNode nodes_pub[PUB_NODES];
+    
+    memset (nodes_pub, 0, sizeof(nodes_pub));
+
+    while (ros::ok())
+    {
+	SelidarMeasurementNode nodes[PUB_NODES*2];
+	size_t count = _countof(nodes);
+	start_scan_time = ros::Time::now ();
+	op_result = drv->grabScanData (nodes, count);
+	end_scan_time = ros::Time::now();
+	scan_duration = (end_scan_time - start_scan_time).toSec () * 1e-3;
+
+	if (op_result == Success)
+	{
+		float angle_min = 0;
+		float angle_max = 0;
+
+		drv->acsendScanData(nodes, count);
+		if(angle_compensate)
+		{
+			angle_min = DEG2RAD(0.0f);
+			angle_max = DEG2RAD(359.0f);
+			memset(nodes_pub, 0, sizeof(nodes_pub));
+			int i = 0;
+			for(;i<count;i++)
+			{
+				if(nodes[i].distance_scale_1000!=0)
+				{
+					float angle = (float)(nodes[i].angle_scale_100/100.0f);
+					int pos = (int)(angle/DELTA_ANGLE);
+					float angle_pre = angle-pos*DELTA_ANGLE;
+					float angle_next = (pos+1)*DELTA_ANGLE-angle;
+					if(angle_pre<angle_next)
+					{
+						if(pos<PUB_NODES)
+						{
+							nodes_pub[pos]=nodes[i];
+						}
+					}
+					else 
+					{
+						if(pos<PUB_NODES-1)
+						{
+							nodes_pub[pos+1]=nodes[i];
+						}
+					}	
+				}
+			}
+			publish_scan(&scan_pub,
+				  nodes_pub,
+				  PUB_NODES, start_scan_time,
+				  scan_duration, inverted,
+				  angle_min, angle_max,
+				  frame_id);
+
+		}
+		else
+		{
+			int start_node = 0;
+			int end_node = 0;
+			int i = 0;
+			int pub_nodes_count = 0;
+			while(nodes[i++].distance_scale_1000!=0&&i<count);
+			start_node = i-1;
+			i = count-1;
+			while(nodes[i--].distance_scale_1000==0&&i>0);
+			end_node = i+1;
+			angle_min = (float)(nodes[start_node].angle_scale_100/100.0f);
+			angle_max = (float)(nodes[end_node-1].angle_scale_100/100.0f);
+			pub_nodes_count = end_node-start_node;
+			memcpy(nodes_pub, &nodes[start_node], pub_nodes_count*sizeof(SelidarMeasurementNode));
+			angle_min = DEG2RAD(angle_min);
+			angle_max = DEG2RAD(angle_max);
+			publish_scan(&scan_pub, nodes_pub, pub_nodes_count, start_scan_time,
+					scan_duration, inverted,
+					angle_min, angle_max,
+					frame_id);
+		}
+
+		
+	}
+	ros::spinOnce();
+    }
+    // done!
+   // drv->stop();
+    drv->disconnect ();
+	//ros::spinOnce();
+       
+    return 0;
+
+}
+
+
+#else
+
 int main(int argc, char * argv[]) 
 {
 
@@ -443,3 +601,5 @@ int main(int argc, char * argv[])
        
     return 0;
 }
+
+#endif
