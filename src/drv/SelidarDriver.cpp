@@ -347,44 +347,56 @@ namespace NS_Selidar
     
     bool got_start_range = false;
 
-    while (scanning)
+    //discard first packet
+    unsigned short isstart = 0;
+    while(!isstart)
     {
-      unsigned short isstart = 0;
-      if (IS_FAIL(ans = waitScanData (isstart, local_buf, count)))
-      {
-        if (ans != Timeout)
-        {
-          scanning = false;
-          return Timeout;
-        }
-      }
+		if(IS_FAIL(ans = waitScanData(isstart, local_buf, count)))
+		{
+			if(ans != Timeout)
+			{
+				scanning = false;
+				return Timeout;
+			}
+		}
+    }
 
-      boost::mutex::scoped_lock auto_lock (rxtx_lock);
 
-      if (isstart == 1)
-      {
-		  cached_scan_node_count = cached_count;
-		  memcpy(cached_scan_node_buf, local_scan, cached_scan_node_count*sizeof(SelidarMeasurementNode));
-          data_cond.set ();
-        cached_count = 0;
-      }
+    while (scanning)
+	{
+		isstart = 0;
+		if (IS_FAIL(ans = waitScanData (isstart, local_buf, count)))
+		{
+			if (ans != Timeout)
+			{
+				scanning = false;
+				return Timeout;
+			}
+		}
+
+		boost::mutex::scoped_lock auto_lock (rxtx_lock);
+
+		if (isstart == 1)
+		{
+			cached_scan_node_count = cached_count;
+			memcpy(cached_scan_node_buf, local_scan, cached_scan_node_count*sizeof(SelidarMeasurementNode));
+			data_cond.set ();
+			cached_count = 0;
+		}
 		if(cached_count >= 2048)
 		{
 			scanning = false;
 			return Timeout;
 		}
-     for (int i = 0; i < count; i++)
-    {
-      local_scan[cached_count++] = local_buf[i];
-    }
+		for (int i = 0; i < count; i++)
+		{
+			local_scan[cached_count++] = local_buf[i];
+			}
 
-      
-       //   printf ("cache: %d, --->%d\n", count, cached_scan_node_count);
-          
-
-    }
-    scanning = false;
-    return Success;
+     
+		}
+		scanning = false;
+		return Success;
   }
   
   int
@@ -413,7 +425,6 @@ namespace NS_Selidar
       checksum ^= *((unsigned char*) &response_header + i);
     }
     
-    //discard first packet
     size_t data_size = response_header.length - sizeof(SelidarPacketHead);
     flag = response_header.payload_len>>15;
     if (rxtx->waitfordata (data_size, timeout) != Serial::ANS_OK)
@@ -506,8 +517,6 @@ namespace NS_Selidar
           return Timeout; //consider as timeout
           
         boost::mutex::scoped_lock auto_lock (rxtx_lock);
-        
-       /// printf ("grab: %d\n", cached_scan_node_count);
 
         size_t size_to_copy = min(count, cached_scan_node_count);
         
@@ -531,15 +540,11 @@ namespace NS_Selidar
 	size_t j = 0;
 	SelidarMeasurementNode tnode;
 
-	//printf("count=%d\n", count);
-	//printf("raw:\n");
 	for(i=0;i<count;i++)
 	{
 		if(nodebuffer[i].angle_scale_100>=36000)
 			nodebuffer[i].angle_scale_100 -= 36000;
-		//printf("%d,", nodebuffer[i].angle_scale_100);
 	}
-	//printf("\nascend\n");
 	for(i=0;i<count-1;i++)
 	{
 	    j=i+1;
@@ -547,19 +552,13 @@ namespace NS_Selidar
 	    {
 		if(nodebuffer[j].angle_scale_100<nodebuffer[i].angle_scale_100)
 		{
-		   // printf("angle:[%d]%d,[%d]%d\n", i, nodebuffer[i].angle_scale_100, j, nodebuffer[j].angle_scale_100);
 		    memcpy(&tnode, &nodebuffer[i], sizeof(SelidarMeasurementNode));
 		    memcpy(&nodebuffer[i], &nodebuffer[j], sizeof(SelidarMeasurementNode));
 		    memcpy(&nodebuffer[j], &tnode, sizeof(SelidarMeasurementNode));
 		}
 	    }
 	}
-	//for(i=0;i<count;i++)
-	//{
-	//	printf("%d,", nodebuffer[i].angle_scale_100);
-	//}
-	//printf("\n");
-	
+
     }
 
 	int
