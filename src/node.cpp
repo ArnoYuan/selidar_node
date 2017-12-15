@@ -296,6 +296,7 @@ int main(int argc, char *argv[])
     std::string frame_id;
     bool inverted = false;
     int angle_compensate = 1;
+	int pub_nodes_count = 0;
 
     ros::NodeHandle nh;
     ros::Publisher scan_pub = nh.advertise<sensor_msgs::LaserScan>("scan", 1000);
@@ -363,6 +364,7 @@ int main(int argc, char *argv[])
 		drv->acsendScanData(nodes, count);
 		if(angle_compensate)
 		{
+			pub_nodes_count = PUB_NODES;
 			angle_min = DEG2RAD(0.0f);
 			angle_max = DEG2RAD(359.0f);
 			memset(nodes_pub, 0, sizeof(nodes_pub));
@@ -377,14 +379,14 @@ int main(int argc, char *argv[])
 					float angle_next = (pos+1)*DELTA_ANGLE-angle;
 					if(angle_pre<angle_next)
 					{
-						if(pos<PUB_NODES)
+						if(pos<pub_nodes_count)
 						{
 							nodes_pub[pos]=nodes[i];
 						}
 					}
 					else 
 					{
-						if(pos<PUB_NODES-1)
+						if(pos<pub_nodes_count-1)
 						{
 							nodes_pub[pos+1]=nodes[i];
 						}
@@ -393,7 +395,7 @@ int main(int argc, char *argv[])
 			}
 			publish_scan(&scan_pub,
 				  nodes_pub,
-				  PUB_NODES, start_scan_time,
+				  pub_nodes_count, start_scan_time,
 				  scan_duration, inverted,
 				  angle_min, angle_max,
 				  frame_id);
@@ -404,7 +406,6 @@ int main(int argc, char *argv[])
 			int start_node = 0;
 			int end_node = 0;
 			int i = 0;
-			int pub_nodes_count = 0;
 			while(nodes[i++].distance_scale_1000!=0&&i<count);
 			start_node = i-1;
 			i = count-1;
@@ -412,7 +413,7 @@ int main(int argc, char *argv[])
 			end_node = i+1;
 			angle_min = (float)(nodes[start_node].angle_scale_100/100.0f);
 			angle_max = (float)(nodes[end_node-1].angle_scale_100/100.0f);
-			pub_nodes_count = end_node-start_node;
+			pub_nodes_count = end_node-start_node+1;
 			memcpy(nodes_pub, &nodes[start_node], pub_nodes_count*sizeof(SelidarMeasurementNode));
 			angle_min = DEG2RAD(angle_min);
 			angle_max = DEG2RAD(angle_max);
