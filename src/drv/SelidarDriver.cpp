@@ -111,7 +111,12 @@ namespace NS_Selidar
     
     memcpy (pkg + pkg_size, &checksum, 1);
     pkg_size++;
-    
+    printf("[PKG]");
+	for(int i=0;i<pkg_size;i++)
+	{
+		printf("%x ", pkg[i]);
+	}
+	printf("\n");
     rxtx->senddata (pkg, pkg_size);
     
     return Success;
