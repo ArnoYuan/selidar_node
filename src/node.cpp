@@ -21,8 +21,8 @@
 
 #define DEG2RAD(x) ((x)*M_PI/180.)
 
-#define PUB_NODES	720
-#define DELTA_ANGLE	0.5
+#define PUB_NODES	360
+#define DELTA_ANGLE	1
 
 int fd = 0;
 bool isScanning = 0;
@@ -312,7 +312,7 @@ int main(int argc, char *argv[])
 
     while (ros::ok())
     {
-	SelidarMeasurementNode nodes[PUB_NODES*2];
+	SelidarMeasurementNode nodes[4000];
 	size_t count = _countof(nodes);
 	start_scan_time = ros::Time::now ();
 	op_result = drv->grabScanData (nodes, count);
