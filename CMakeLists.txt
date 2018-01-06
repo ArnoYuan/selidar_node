@@ -33,6 +33,9 @@ catkin_package()
 add_executable(selidarNode src/node.cpp ${SELIDAR_DRV_SRC})
 target_link_libraries(selidarNode ${catkin_LIBRARIES})
 
+add_executable(motor_client src/motor_client.cpp ${SELIDAR_DRV_SRC})
+target_link_libraries(motor_client ${catkin_LIBRARIES})
+
 install(TARGETS selidarNode
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
