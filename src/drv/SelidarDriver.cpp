@@ -492,7 +492,7 @@ namespace NS_Selidar
     }
     
    // stop ();
-    
+    rxtx->flush(0);
     // have to slow down the speed of sending cmd, otherwise next cmd will be discard by radar
     NS_NaviCommon::delay (100);
     
